@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Embed Bridge for Notion</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 h-full flex flex-col m-0 p-0 overflow-hidden">
+
+  <!-- 頂部控制列 (若帶有 URL 參數則會自動隱藏，提供純淨全螢幕體驗) -->
+  <header id="control-bar" class="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap items-center justify-between shadow-sm z-10 transition-all duration-300">
+    <div class="flex items-center space-x-2 mb-2 sm:mb-0">
+      <div class="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+      <h1 class="font-semibold text-sm tracking-wide text-gray-700">Notion ➔ Google 轉載中介站</h1>
+    </div>
+
+    <!-- 網址輸入與轉換控制區 -->
+    <div class="flex items-center gap-2 w-full sm:w-auto">
+      <input 
+        type="url" 
+        id="notion-url-input" 
+        placeholder="貼上 Notion 公開頁面網址 (例如 https://xxx.notion.site/...)" 
+        class="flex-1 sm:w-80 text-xs px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+      />
+      <button 
+        onclick="loadNotionPage()" 
+        class="px-4 py-2 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1 shrink-0">
+        <span>載入頁面</span>
+      </button>
+      <button 
+        onclick="toggleFullscreenMode()" 
+        title="切換隱藏頂部控制列" 
+        class="px-3 py-2 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg border border-gray-300 transition-all shrink-0">
+        全螢幕
+      </button>
+    </div>
+  </header>
+
+  <!-- 主要內容區 (Iframe 容器) -->
+  <main class="flex-1 w-full h-full relative bg-white">
+    <!-- 預設歡迎 / 設定指引頁面 -->
+    <div id="placeholder-container" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-gray-50 z-0">
+      <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-blue-100">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+        </svg>
+      </div>
+      <h2 class="text-lg font-bold text-gray-800 mb-2">準備將 Notion 頁面嵌入 Google！</h2>
+      <p class="text-xs text-gray-500 max-w-md mb-6 leading-relaxed">
+        請在上方輸入框貼上您的 **Notion 分享連結（已開啟 Web 發佈）**，或直接使用帶有 <code class="bg-gray-200 px-1 py-0.5 rounded text-red-600">?url=</code> 參數的網址進行自動全螢幕嵌入。
+      </p>
+      
+      <div class="bg-white p-4 rounded-xl border border-gray-200 text-left text-xs space-y-2 max-w-md shadow-sm">
+        <div class="font-semibold text-gray-700 mb-1">📌 快速使用方法：</div>
+        <div class="text-gray-600"><strong>方法 A (靜態嵌入)：</strong> 直接部署此 HTML 網頁至 GitHub Pages / Vercel，然後在網址後面加上：<br><code class="text-blue-600 break-all block mt-1 bg-gray-50 p-1.5 rounded border border-gray-100">https://your-domain.com/?url=https://your-notion.notion.site/xxx</code></div>
+        <div class="text-gray-600"><strong>方法 B (動態測試)：</strong> 在上方文字框手動貼上網址並點擊「載入頁面」。</div>
+      </div>
+    </div>
+
+    <!-- Iframe 本體 -->
+    <iframe 
+      id="notion-iframe" 
+      class="w-full h-full border-0 absolute inset-0 z-0 hidden"
+      allow="fullscreen"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation">
+    </iframe>
+  </main>
+
+  <script>
+    // 頁面初始化
+    window.onload = function() {
+      // 解析網址中的 ?url= 參數
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetUrl = urlParams.get('url');
+
+      if (targetUrl) {
+        // 若帶有 ?url= 參數，自動隱藏頂部控制列，達到完全純淨的全螢幕嵌入效果
+        document.getElementById('control-bar').classList.add('hidden');
+        document.getElementById('notion-url-input').value = targetUrl;
+        renderIframe(targetUrl);
+      }
+    };
+
+    // 載入 Notion 頁面
+    function loadNotionPage() {
+      const input = document.getElementById('notion-url-input');
+      let url = input.value.trim();
+
+      if (!url) {
+        alert("請輸入有效的 Notion 網址！");
+        return;
+      }
+
+      // 自動補齊 https:// 協定
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+        input.value = url;
+      }
+
+      renderIframe(url);
+    }
+
+    // 渲染 Iframe
+    function renderIframe(url) {
+      const iframe = document.getElementById('notion-iframe');
+      const placeholder = document.getElementById('placeholder-container');
+
+      // 隱藏指引，顯示 Iframe
+      placeholder.classList.add('hidden');
+      iframe.classList.remove('hidden');
+
+      // 載入網址
+      iframe.src = url;
+    }
+
+    // 切換頂部列顯示/隱藏
+    function toggleFullscreenMode() {
+      const controlBar = document.getElementById('control-bar');
+      controlBar.classList.toggle('hidden');
+    }
+  </script>
+</body>
+</html>
